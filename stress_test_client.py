@@ -18,6 +18,7 @@ def generate_test_file(filename, size_bytes):
 
 def client_task(operation, filename, concurrency_type="thread", worker_id=0):
     start_time = time.time()
+    downloaded_file = None  # Untuk menyimpan nama file yang diunduh
     if operation == "UPLOAD":
         try:
             with open(filename, "rb") as fp:
@@ -48,18 +49,33 @@ def client_task(operation, filename, concurrency_type="thread", worker_id=0):
             if operation == "DOWNLOAD":
                 namafile = result['data_namafile']
                 isifile = base64.b64decode(result['data_file'])
-                with open(f"downloaded_{worker_id}_{namafile}", 'wb') as fp:
+                downloaded_file = f"downloaded_{worker_id}_{namafile}"
+                with open(downloaded_file, 'wb') as fp:
                     fp.write(isifile)
             end_time = time.time()
             elapsed_time = end_time - start_time
             file_size = os.path.getsize(filename) if operation == "UPLOAD" else len(isifile)
             throughput = file_size / elapsed_time if elapsed_time > 0 else 0
+            # Hapus file yang diunduh jika operasi adalah DOWNLOAD
+            if operation == "DOWNLOAD" and downloaded_file and os.path.exists(downloaded_file):
+                try:
+                    os.remove(downloaded_file)
+                    logging.info(f"Deleted downloaded file: {downloaded_file}")
+                except Exception as e:
+                    logging.warning(f"Failed to delete downloaded file {downloaded_file}: {e}")
             return True, elapsed_time, throughput
         else:
             logging.error(f"Worker {worker_id} failed: {result['data']}")
             return False, 0, 0
     except Exception as e:
         logging.error(f"Worker {worker_id} exception: {e}")
+        # Pastikan file dihapus jika ada error tetapi file sudah dibuat
+        if operation == "DOWNLOAD" and downloaded_file and os.path.exists(downloaded_file):
+            try:
+                os.remove(downloaded_file)
+                logging.info(f"Deleted downloaded file on error: {downloaded_file}")
+            except Exception as e:
+                logging.warning(f"Failed to delete downloaded file {downloaded_file}: {e}")
         return False, 0, 0
 
 def run_stress_test(operation, file_size_mb, client_workers, concurrency_type="thread"):
