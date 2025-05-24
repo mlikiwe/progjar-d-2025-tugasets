@@ -3,27 +3,16 @@ import logging
 from concurrent.futures import ProcessPoolExecutor
 from file_protocol import FileProtocol
 import multiprocessing
+import json
 
-def process_client(connection, address):
+def process_client_data(message):
     fp = FileProtocol()
-    buffer = ""
     try:
-        while True:
-            data = connection.recv(8192)
-            if not data:
-                break
-            buffer += data.decode()
-            while "\r\n\r\n" in buffer:
-                message, buffer = buffer.split("\r\n\r\n", 1)
-                result = fp.proses_string(message)
-                result += "\r\n\r\n"
-                connection.sendall(result.encode())
-        return True
+        result = fp.proses_string(message)
+        return result
     except Exception as e:
-        logging.warning(f"Error processing client {address}: {e}")
-        return False
-    finally:
-        connection.close()
+        logging.warning(f"Error processing message: {e}")
+        return json.dumps(dict(status='ERROR', data=str(e)))
 
 class Server:
     def __init__(self, ipaddress='0.0.0.0', port=45000, max_workers=5):
@@ -37,21 +26,49 @@ class Server:
     def run(self):
         logging.warning(f"Server running on {self.ipinfo} with {self.executor._max_workers} workers")
         self.my_socket.bind(self.ipinfo)
-        self.my_socket.listen(50)
+        self.my_socket.listen(50)  # Increased backlog
         while True:
             connection, client_address = self.my_socket.accept()
             logging.warning(f"Connection from {client_address}")
-            # Pass connection as a file descriptor to avoid pickling issues
-            conn_fd = connection.fileno()
-            conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM, fileno=conn_fd)
-            future = self.executor.submit(process_client, conn, client_address)
-            future.add_done_callback(self._handle_result)
+            try:
+                buffer = ""
+                while True:
+                    data = connection.recv(1024*1024)
+                    if not data:
+                        break
+                    buffer += data.decode('utf-8', errors='ignore')
+                    # Process all complete messages in the buffer
+                    while "\r\n\r\n" in buffer:
+                        message, buffer = buffer.split("\r\n\r\n", 1)
+                        # Validate that the message is non-empty and likely JSON
+                        if message.strip():
+                            try:
+                                # Try to parse the message as JSON to ensure it's valid
+                                json.loads(message)
+                                future = self.executor.submit(process_client_data, message)
+                                future.add_done_callback(lambda f: self._handle_result(f, connection))
+                            except json.JSONDecodeError as e:
+                                logging.warning(f"Invalid JSON from {client_address}: {e}")
+                                error_response = json.dumps(dict(status='ERROR', data=f"Invalid JSON: {e}"))
+                                connection.sendall((error_response + "\r\n\r\n").encode())
+                                with self.fail_count.get_lock():
+                                    self.fail_count.value += 1
+            except Exception as e:
+                logging.warning(f"Error handling client {client_address}: {e}")
+                with self.fail_count.get_lock():
+                    self.fail_count.value += 1
+            finally:
+                connection.close()
 
-    def _handle_result(self, future):
-        if future.result():
+    def _handle_result(self, future, connection):
+        try:
+            result = future.result()
+            result += "\r\n\r\n"
+            connection.sendall(result.encode())
             with self.success_count.get_lock():
                 self.success_count.value += 1
-        else:
+        except Exception as e:
+            logging.warning(f"Error in future result: {e}")
             with self.fail_count.get_lock():
                 self.fail_count.value += 1
 
