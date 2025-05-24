@@ -4,6 +4,7 @@ import base64
 import socket
 import json
 import logging
+import argparse
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from file_client_cli import send_command
 import random
@@ -88,38 +89,57 @@ def run_stress_test(operation, file_size_mb, client_workers, concurrency_type="t
     }
 
 def main():
-    operations = ["UPLOAD", "DOWNLOAD"]
-    file_sizes_mb = [10, 50, 100]
-    client_workers = [1, 5, 50]
-    concurrency_types = ["thread", "process"]
+    # Tambahkan parser untuk argumen baris perintah
+    parser = argparse.ArgumentParser(description="Stress test client")
+    parser.add_argument(
+        "--operation",
+        choices=["UPLOAD", "DOWNLOAD"],
+        required=True,
+        help="Operation to perform (UPLOAD or DOWNLOAD)"
+    )
+    parser.add_argument(
+        "--method",
+        choices=["thread", "process"],
+        required=True,
+        help="Concurrency method to use (thread or process)"
+    )
+    parser.add_argument(
+        "--volume",
+        type=int,
+        choices=[10, 50, 100],
+        required=True,
+        help="File size in MB (10, 50, or 100)"
+    )
+    parser.add_argument(
+        "--worker",
+        type=int,
+        choices=[1, 5, 50],
+        required=True,
+        help="Number of client workers (1, 5, or 50)"
+    )
+    args = parser.parse_args()
+
+    # Jalankan stress test dengan parameter yang diberikan
+    print(f"Running test: {args.operation}, {args.volume}MB, {args.worker} workers, {args.method}")
+    result = run_stress_test(args.operation, args.volume, args.worker, args.method)
     
-    results = []
-    test_number = 1
-    
-    for op in operations:
-        for size in file_sizes_mb:
-            for workers in client_workers:
-                for concurrency in concurrency_types:
-                    print(f"Running test {test_number}: {op}, {size}MB, {workers} workers, {concurrency}")
-                    result = run_stress_test(op, size, workers, concurrency)
-                    results.append({
-                        "number": test_number,
-                        "operation": op,
-                        "volume_mb": size,
-                        "client_workers": workers,
-                        "concurrency_type": concurrency,
-                        "avg_time": result["avg_time"],
-                        "avg_throughput": result["avg_throughput"],
-                        "client_success": result["success"],
-                        "client_fail": result["fail"]
-                    })
-                    test_number += 1
-    
-    # Print results table
+    # Simpan hasil ke dalam list untuk ditampilkan di konsol
+    result_entry = {
+        "number": 1,
+        "operation": args.operation,
+        "volume_mb": args.volume,
+        "client_workers": args.worker,
+        "concurrency_type": args.method,
+        "avg_time": result["avg_time"],
+        "avg_throughput": result["avg_throughput"],
+        "client_success": result["success"],
+        "client_fail": result["fail"]
+    }
+
+    # Cetak hasil ke konsol
     print("\nStress Test Results:")
     print(f"{'No':<5} {'Op':<10} {'Size(MB)':<10} {'Client Workers':<15} {'Concurrency':<12} {'Avg Time(s)':<12} {'Throughput(B/s)':<15} {'Client Success':<15} {'Client Fail':<10}")
-    for r in results:
-        print(f"{r['number']:<5} {r['operation']:<10} {r['volume_mb']:<10} {r['client_workers']:<15} {r['concurrency_type']:<12} {r['avg_time']:<12.2f} {r['avg_throughput']:<15.2f} {r['client_success']:<15} {r['client_fail']:<10}")
+    print(f"{result_entry['number']:<5} {result_entry['operation']:<10} {result_entry['volume_mb']:<10} {result_entry['client_workers']:<15} {result_entry['concurrency_type']:<12} {result_entry['avg_time']:<12.2f} {result_entry['avg_throughput']:<15.2f} {result_entry['client_success']:<15} {result_entry['client_fail']:<10}")
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.WARNING)

@@ -41,7 +41,7 @@ class Server:
     def run(self):
         logging.warning(f"Server running on {self.ipinfo} with {self.executor._max_workers} workers")
         self.my_socket.bind(self.ipinfo)
-        self.my_socket.listen(5)
+        self.my_socket.listen(50)
         while True:
             connection, client_address = self.my_socket.accept()
             logging.warning(f"Connection from {client_address}")
