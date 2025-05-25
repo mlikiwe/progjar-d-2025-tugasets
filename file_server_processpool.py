@@ -26,7 +26,7 @@ class Server:
     def run(self):
         logging.warning(f"Server running on {self.ipinfo} with {self.executor._max_workers} workers")
         self.my_socket.bind(self.ipinfo)
-        self.my_socket.listen(50)  # Increased backlog
+        self.my_socket.listen(50)
         while True:
             connection, client_address = self.my_socket.accept()
             logging.warning(f"Connection from {client_address}")
@@ -37,13 +37,10 @@ class Server:
                     if not data:
                         break
                     buffer += data.decode('utf-8', errors='ignore')
-                    # Process all complete messages in the buffer
                     while "\r\n\r\n" in buffer:
                         message, buffer = buffer.split("\r\n\r\n", 1)
-                        # Validate that the message is non-empty and likely JSON
                         if message.strip():
                             try:
-                                # Try to parse the message as JSON to ensure it's valid
                                 json.loads(message)
                                 future = self.executor.submit(process_client_data, message)
                                 future.add_done_callback(lambda f: self._handle_result(f, connection))

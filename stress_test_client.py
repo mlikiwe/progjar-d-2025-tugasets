@@ -18,7 +18,7 @@ def generate_test_file(filename, size_bytes):
 
 def client_task(operation, filename, concurrency_type="thread", worker_id=0):
     start_time = time.time()
-    downloaded_file = None  # Untuk menyimpan nama file yang diunduh
+    downloaded_file = None
     if operation == "UPLOAD":
         try:
             with open(filename, "rb") as fp:
@@ -56,7 +56,6 @@ def client_task(operation, filename, concurrency_type="thread", worker_id=0):
             elapsed_time = end_time - start_time
             file_size = os.path.getsize(filename) if operation == "UPLOAD" else len(isifile)
             throughput = file_size / elapsed_time if elapsed_time > 0 else 0
-            # Hapus file yang diunduh jika operasi adalah DOWNLOAD
             if operation == "DOWNLOAD" and downloaded_file and os.path.exists(downloaded_file):
                 try:
                     os.remove(downloaded_file)
@@ -69,7 +68,6 @@ def client_task(operation, filename, concurrency_type="thread", worker_id=0):
             return False, 0, 0
     except Exception as e:
         logging.error(f"Worker {worker_id} exception: {e}")
-        # Pastikan file dihapus jika ada error tetapi file sudah dibuat
         if operation == "DOWNLOAD" and downloaded_file and os.path.exists(downloaded_file):
             try:
                 os.remove(downloaded_file)
@@ -105,7 +103,6 @@ def run_stress_test(operation, file_size_mb, client_workers, concurrency_type="t
     }
 
 def main():
-    # Tambahkan parser untuk argumen baris perintah
     parser = argparse.ArgumentParser(description="Stress test client")
     parser.add_argument(
         "--operation",
@@ -135,11 +132,9 @@ def main():
     )
     args = parser.parse_args()
 
-    # Jalankan stress test dengan parameter yang diberikan
     print(f"Running test: {args.operation}, {args.volume}MB, {args.worker} workers, {args.method}")
     result = run_stress_test(args.operation, args.volume, args.worker, args.method)
     
-    # Simpan hasil ke dalam list untuk ditampilkan di konsol
     result_entry = {
         "number": 1,
         "operation": args.operation,
@@ -152,7 +147,6 @@ def main():
         "client_fail": result["fail"]
     }
 
-    # Cetak hasil ke konsol
     print("\nStress Test Results:")
     print(f"{'No':<5} {'Op':<10} {'Size(MB)':<10} {'Client Workers':<15} {'Concurrency':<12} {'Avg Time(s)':<12} {'Throughput(B/s)':<15} {'Client Success':<15} {'Client Fail':<10}")
     print(f"{result_entry['number']:<5} {result_entry['operation']:<10} {result_entry['volume_mb']:<10} {result_entry['client_workers']:<15} {result_entry['concurrency_type']:<12} {result_entry['avg_time']:<12.2f} {result_entry['avg_throughput']:<15.2f} {result_entry['client_success']:<15} {result_entry['client_fail']:<10}")
